@@ -62,8 +62,8 @@ class CsvParser extends Parser {
     boolean decimal = false;
     int fractionDigits = 0;
     int tokenStart = 0; // used for numeric token to backtrace if not successful
-    int columnCounter = 0;
-    int colIdx = _setup._parse_columns_indices[columnCounter];
+    int columnCounter = 0;  // index into parsed columns only, exclude skipped columns.
+    int colIdx = 0; // count each actual column in the dataset including the skipped columns
     byte c = bits[offset];
     // skip comments for the first chunk (or if not a chunk)
     byte[] nonDataLineMarkers = nonDataLineMarkers();
@@ -86,8 +86,10 @@ class CsvParser extends Parser {
     final boolean forceable = dout instanceof FVecParseWriter && ((FVecParseWriter)dout)._ctypes != null && _setup._column_types != null;
 MAIN_LOOP:
     while (true) {
-      final boolean forcedCategorical = forceable && columnCounter < _setup._parse_columns_indices.length && _setup._column_types[colIdx] == Vec.T_CAT;
-      final boolean forcedString = forceable && columnCounter < _setup._parse_columns_indices.length && _setup._column_types[colIdx] == Vec.T_STR;
+      final boolean forcedCategorical = forceable && colIdx < _setup._column_types.length &&
+              _setup._column_types[_setup._parse_columns_indices[columnCounter]] == Vec.T_CAT;
+      final boolean forcedString = forceable && colIdx  < _setup._column_types.length &&
+              _setup._column_types[_setup._parse_columns_indices[columnCounter]] == Vec.T_STR;
 
       switch (state) {
         // ---------------------------------------------------------------------
@@ -153,22 +155,24 @@ MAIN_LOOP:
             str.addBuff(bits);
           }
           if( !isNa &&
-              _setup.isNA(colIdx, str.toBufferedString())) {
+              _setup.isNA(columnCounter, str.toBufferedString())) {
             isNa = true;
           }
-          if (!isNa) {
-            dout.addStrCol(colIdx, str.toBufferedString());
-            if (!isAllASCII)
-              dout.setIsAllASCII(colIdx, isAllASCII);
+          if (!isNa && _keepColumns[colIdx]) {
+            dout.addStrCol(columnCounter, str.toBufferedString());
+            if (!isAllASCII && _keepColumns[colIdx])
+              dout.setIsAllASCII(columnCounter, isAllASCII);
           } else {
-            dout.addInvalidCol(colIdx);
+            if (_keepColumns[colIdx])
+              dout.addInvalidCol(columnCounter);
             isNa = false;
           }
           str.set(null, 0, 0);
           quotes = 0;
           isAllASCII = true;
-          columnCounter++;
-          colIdx = _setup._parse_columns_indices[columnCounter];
+          if (_keepColumns[colIdx])
+            columnCounter++;
+          colIdx++;
           state = SEPARATOR_OR_EOL;
           // fallthrough to SEPARATOR_OR_EOL
         // ---------------------------------------------------------------------
@@ -189,12 +193,12 @@ MAIN_LOOP:
             String err = "Unmatched quote char " + ((char) quotes);
             dout.invalidLine(new ParseWriter.ParseErr(err, cidx, dout.lineNum(), offset + din.getGlobalByteOffset()));
             columnCounter=0;
-            colIdx = _setup._parse_columns_indices[columnCounter];
+            colIdx=0;
             quotes = 0;
           } else if (colIdx != 0) {
             dout.newLine();
             columnCounter = 0;
-            colIdx = _setup._parse_columns_indices[columnCounter];
+            colIdx=0;
           }
           state = (c == CHAR_CR) ? EXPECT_COND_LF : POSSIBLE_EMPTY_LINE;
           if( !firstChunk )
@@ -237,12 +241,15 @@ MAIN_LOOP:
               break;
           } else if (c == CHAR_SEPARATOR) {
             // we have empty token, store as NaN
-            colIdx = _setup._parse_columns_indices[columnCounter++];
-            dout.addInvalidCol(colIdx);
-            break;
+            if (_keepColumns[colIdx]) {
+              dout.addInvalidCol(columnCounter++);
+              colIdx++;
+              break;
+            }
           } else if (isEOL(c)) {
-            colIdx = _setup._parse_columns_indices[columnCounter++];
-            dout.addInvalidCol(colIdx);
+            if (_keepColumns[colIdx])
+              dout.addInvalidCol(columnCounter++);
+            colIdx++;
             state = EOL;
             continue MAIN_LOOP;
           }
@@ -259,7 +266,7 @@ MAIN_LOOP:
           // fallthrough to TOKEN
         // ---------------------------------------------------------------------
         case TOKEN:
-          if( dout.isString(colIdx) ) { // Forced already to a string col?
+          if( dout.isString(columnCounter) ) { // Forced already to a string col?
             state = STRING; // Do not attempt a number parse, just do a string parse
             str.set(bits, offset, 0);
             continue MAIN_LOOP;
@@ -330,18 +337,19 @@ MAIN_LOOP:
 
           if (c == CHAR_SEPARATOR && quotes == 0) {
             exp = exp - fractionDigits;
-            dout.addNumCol(colIdx,number,exp);
-            columnCounter++;
-            colIdx = _setup._parse_columns_indices[columnCounter];
+            if (_keepColumns[columnCounter])
+              dout.addNumCol(columnCounter++,number,exp);
+            colIdx++;
             // do separator state here too
             state = WHITESPACE_BEFORE_TOKEN;
             break;
           } else if (isEOL(c)) {
             exp = exp - fractionDigits;
-            dout.addNumCol(colIdx,number,exp);
+            if (_keepColumns[columnCounter])
+              dout.addNumCol(columnCounter,number,exp);
             // do EOL here for speedup reasons
             columnCounter=0;
-            colIdx = _setup._parse_columns_indices[columnCounter];
+            colIdx=0;
             dout.newLine();
             state = (c == CHAR_CR) ? EXPECT_COND_LF : POSSIBLE_EMPTY_LINE;
             if( !firstChunk )
@@ -495,9 +503,8 @@ MAIN_LOOP:
           break; // MAIN_LOOP; // when the first character we see is a line end
       }
       c = bits[offset];
-
-    } // end MAIN_LOOP
-    if (columnCounter == 0)
+    } // end
+    if (colIdx == 0)
       dout.rollbackLine();
     // If offset is still validly within the buffer, save it so the next pass
     // can start from there.

@@ -260,7 +260,8 @@ public final class ParseDataset {
       if (!setup.getParseType().isDomainProvided) { // Domains are not provided via setup we need to collect them
         job.update(0, "Collecting categorical domains across nodes.");
         {
-          GatherCategoricalDomainsTask gcdt = new GatherCategoricalDomainsTask(mfpt._cKey, ecols).doAllNodes();
+          GatherCategoricalDomainsTask gcdt = new GatherCategoricalDomainsTask(mfpt._cKey, ecols,
+                  mfpt._parseSetup._parse_columns_indices).doAllNodes();
           //Test domains for excessive length.
           List<String> offendingColNames = new ArrayList<>();
           for (int i = 0; i < ecols.length; i++) {
@@ -297,7 +298,7 @@ public final class ParseDataset {
           RPC[] rpcs = new RPC[H2O.CLOUD.size()];
           for (int i = 0; i < fcdt.length; i++){
             H2ONode[] nodes = H2O.CLOUD.members();
-            fcdt[i] = new CreateParse2GlobalCategoricalMaps(mfpt._cKey, fr._key, ecols);
+            fcdt[i] = new CreateParse2GlobalCategoricalMaps(mfpt._cKey, fr._key, ecols, mfpt._parseSetup._parse_columns_indices);
             rpcs[i] = new RPC<>(nodes[i], fcdt[i]).call();
           }
           for (RPC rpc : rpcs)
@@ -372,11 +373,13 @@ public final class ParseDataset {
     private final Key   _parseCatMapsKey;
     private final Key   _frKey;
     private final int[] _ecol;
+    private final int[] _parseColumns;
 
-    private CreateParse2GlobalCategoricalMaps(Key parseCatMapsKey, Key key, int[] ecol) {
+    private CreateParse2GlobalCategoricalMaps(Key parseCatMapsKey, Key key, int[] ecol, int[] parseColumns) {
       _parseCatMapsKey = parseCatMapsKey;
       _frKey = key;
       _ecol = ecol;
+      _parseColumns = parseColumns;
     }
 
     @Override public void compute2() {
@@ -391,12 +394,12 @@ public final class ParseDataset {
 
         // create old_ordinal->new_ordinal map for each cat column
         for (int eColIdx = 0; eColIdx < _ecol.length; eColIdx++) {
-          int colIdx = _ecol[eColIdx];
+          int colIdx = _parseColumns[_ecol[eColIdx]];
           if (parseCatMaps[colIdx].size() != 0) {
             _nodeOrdMaps[eColIdx] = MemoryManager.malloc4(parseCatMaps[colIdx].maxId() + 1);
             Arrays.fill(_nodeOrdMaps[eColIdx], -1);
             //Bulk String->BufferedString conversion is slightly faster, but consumes memory
-            final BufferedString[] unifiedDomain = BufferedString.toBufferedString(_fr.vec(colIdx).domain());
+            final BufferedString[] unifiedDomain = BufferedString.toBufferedString(_fr.vec(eColIdx).domain());
             //final String[] unifiedDomain = _fr.vec(colIdx).domain();
             for (int i = 0; i < unifiedDomain.length; i++) {
               //final BufferedString cat = new BufferedString(unifiedDomain[i]);
@@ -467,10 +470,12 @@ public final class ParseDataset {
     private final Key _k;
     private final int[] _catColIdxs;
     private byte[][] _packedDomains;
+    private final int[] _parseColumns;
 
-    private GatherCategoricalDomainsTask(Key k, int[] ccols) {
+    private GatherCategoricalDomainsTask(Key k, int[] ccols, int[] parseColumns) {
       _k = k;
       _catColIdxs = ccols;
+      _parseColumns = parseColumns;
     }
 
     @Override
@@ -478,11 +483,11 @@ public final class ParseDataset {
       if (!MultiFileParseTask._categoricals.containsKey(_k)) return;
       _packedDomains = new byte[_catColIdxs.length][];
       final BufferedString[][] _perColDomains = new BufferedString[_catColIdxs.length][];
-      final Categorical[] _colCats = MultiFileParseTask._categoricals.get(_k);
+      final Categorical[] _colCats = MultiFileParseTask._categoricals.get(_k); // still refer to all columns
       int i = 0;
       for (int col : _catColIdxs) {
-        _colCats[col].convertToUTF8(col + 1);
-        _perColDomains[i] = _colCats[col].getColumnDomain();
+        _colCats[_parseColumns[col]].convertToUTF8(_parseColumns[col] + 1);
+        _perColDomains[i] = _colCats[_parseColumns[col]].getColumnDomain();
         Arrays.sort(_perColDomains[i]);
         _packedDomains[i] = PackedDomains.pack(_perColDomains[i]);
         i++;
@@ -983,7 +988,7 @@ public final class ParseDataset {
   // Log information about the dataset we just parsed.
   public static void logParseResults(Frame fr) {
     long numRows = fr.anyVec().length();
-    Log.info("Parse result for " + fr._key + " (" + Long.toString(numRows) + " rows):");
+    Log.info("Parse result for " + fr._key + " (" + Long.toString(numRows) + " rows, "+Integer.toString(fr.numCols())+"columns):");
     // get all rollups started in parallell, otherwise this takes ages!
     Futures fs = new Futures();
     Vec[] vecArr = fr.vecs();
