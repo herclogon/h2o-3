@@ -3546,6 +3546,16 @@ def random_dataset_strings_only(nrow, ncol):
     df = h2o.create_frame(rows=nrow, cols=ncol, missing_fraction=0, has_response=False, **fractions)
     return df
 
+def random_dataset_all_types(nrow, ncol, seed=None):
+    fractions=dict()
+    fractions['real_fraction']=0.16,
+    fractions['categorical_fraction']=0.16,
+    fractions['integer_fraction']=0.16,
+    fractions['binary_fraction']=0.16,
+    fractions['time_fraction']=0.16,
+    fractions['string_fraction']=0.2
+    return h2o.create_frame(rows=nrow, cols=ncol, missing_fraction=0.1, has_response=False, seed=seed)
+
 # generate random dataset of ncolumns of enums only, copied from Pasha
 def random_dataset_enums_only(nrow, ncol, factorL=10, misFrac=0.01, randSeed=None):
     """Create and return a random dataset."""

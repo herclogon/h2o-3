@@ -170,6 +170,7 @@ public class ParseSetup extends Iced {
 
   public String[] getColumnNames() { return _column_names; }
   public int[] getSkippedColumns() { return _skipped_columns; }
+  public int[] get_parse_columns_indices() { return _parse_columns_indices; }
   public String[][] getData() { return _data; }
 
   public String[] getColumnTypeStrings() {

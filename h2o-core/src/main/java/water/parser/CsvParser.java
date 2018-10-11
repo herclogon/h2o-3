@@ -2,6 +2,7 @@ package water.parser;
 
 import org.apache.commons.lang.math.NumberUtils;
 import water.Key;
+import water.exceptions.H2OIllegalArgumentException;
 import water.fvec.FileVec;
 import water.fvec.Vec;
 import water.util.ArrayUtils;
@@ -84,6 +85,9 @@ class CsvParser extends Parser {
     dout.newLine();
 
     final boolean forceable = dout instanceof FVecParseWriter && ((FVecParseWriter)dout)._ctypes != null && _setup._column_types != null;
+    if (_setup.getSkippedColumns() !=null && _setup.get_parse_columns_indices()==null)
+      throw new H2OIllegalArgumentException("Parser:  all columns in the file are skipped and no H2OFrame" +
+              " can be returned.");
 MAIN_LOOP:
     while (true) {
       final boolean forcedCategorical = forceable && colIdx < _setup._column_types.length &&

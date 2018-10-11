@@ -7,11 +7,7 @@ import water.api.schemas3.ParseSVMLightV3;
 import water.api.schemas3.ParseV3;
 import water.exceptions.H2OIllegalArgumentException;
 import water.fvec.Frame;
-import water.parser.ParseDataset;
-import water.parser.ParseSetup;
-import water.parser.ParseWriter;
-import water.parser.ParserInfo;
-import water.parser.ParserService;
+import water.parser.*;
 
 class ParseHandler extends Handler {
   // Entry point for parsing.
@@ -33,13 +29,16 @@ class ParseHandler extends Handler {
     for (int i = 0; i < parse.source_frames.length; i++)
       srcs[i] = parse.source_frames[i].key();
 
+    if ((setup.getSkippedColumns() != null) && (setup.get_parse_columns_indices().length==0))
+      throw new H2OIllegalArgumentException("Parser:  Check and make sure that not all columns are to be skipped!");
     parse.job = new JobV3(ParseDataset.parse(
-        parse.destination_frame.key(), srcs, parse.delete_on_done, setup, parse.blocking
-        )._job);
+            parse.destination_frame.key(), srcs, parse.delete_on_done, setup, parse.blocking
+    )._job);
     if (parse.blocking) {
       Frame fr = DKV.getGet(parse.destination_frame.key());
       parse.rows = fr.numRows();
     }
+
     return parse;
   }
 

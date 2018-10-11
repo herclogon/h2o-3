@@ -11,7 +11,10 @@ import water.fvec.*;
 import water.fvec.Vec.VectorGroup;
 import water.nbhm.NonBlockingHashMap;
 import water.nbhm.NonBlockingSetInt;
-import water.util.*;
+import water.util.ArrayUtils;
+import water.util.FrameUtils;
+import water.util.Log;
+import water.util.PrettyPrint;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,7 +24,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static water.parser.DefaultParserProviders.*;
+import static water.parser.DefaultParserProviders.SVMLight_INFO;
 
 public final class ParseDataset {
   public Job<Frame> _job;
@@ -908,6 +911,9 @@ public final class ParseDataset {
                   _setup._chunk_size, avs, _setup._parse_columns_indices);
           break;
         }
+        if (_setup.getSkippedColumns() !=null && _setup.get_parse_columns_indices()==null)
+          throw new H2OIllegalArgumentException("Parser:  all columns in the file are skipped and no H2OFrame" +
+                  " can be returned.");
         p.parseChunk(in.cidx(), din, dout);
         (_dout = dout).close(_fs);
         Job.update(in._len, _jobKey); // Record bytes parsed
