@@ -245,15 +245,13 @@ MAIN_LOOP:
               break;
           } else if (c == CHAR_SEPARATOR) {
             // we have empty token, store as NaN
-            if (_keepColumns[colIdx]) {
+            if (_keepColumns[colIdx++]) {
               dout.addInvalidCol(columnCounter++);
-              colIdx++;
               break;
             }
           } else if (isEOL(c)) {
-            if (_keepColumns[colIdx])
+            if (_keepColumns[colIdx++])
               dout.addInvalidCol(columnCounter++);
-            colIdx++;
             state = EOL;
             continue MAIN_LOOP;
           }

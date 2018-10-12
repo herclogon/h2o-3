@@ -7,7 +7,7 @@ import os
 
 def import_folder():
   # generate a big frame with all datatypes and save it to csv.  Load it back with different skipped_columns settings
-  nrow = 100000
+  nrow = 1000
   ncol = 1000
   seed=12345
   frac1 = 0.16
@@ -15,12 +15,14 @@ def import_folder():
   f1 = h2o.create_frame(rows=nrow, cols=ncol, real_fraction=frac1, categorical_fraction=frac1, integer_fraction=frac1,
                         binary_fraction=frac1, time_fraction=frac1, string_fraction=frac2, missing_fraction=0.1,
                         has_response=False, seed=seed)
-  tmpdir = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath('__file__')), "..", "results", "test_parser"))
+  tmpdir = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath('__file__')), "..", "results"))
+  if not(os.path.isdir(tmpdir)):
+    os.mkdir(tmpdir)
   savefilenamewithpath = os.path.join(tmpdir, 'in.csv')
   h2o.download_csv(f1, savefilenamewithpath)
 
   # load in whole dataset
-  wholeFrame = h2o.import_file(savefilenamewithpath)
+  wholeFrame = h2o.import_file(savefilenamewithpath, skipped_columns = [0,1,2])
   skip_all = list(range(wholeFrame.ncol))
   skip_even = list(range(wholeFrame.ncol, 0, -2))
   skip_odd = list(range(wholeFrame.ncol, 1, -2))

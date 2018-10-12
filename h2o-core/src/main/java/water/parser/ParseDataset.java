@@ -381,7 +381,7 @@ public final class ParseDataset {
     private CreateParse2GlobalCategoricalMaps(Key parseCatMapsKey, Key key, int[] ecol, int[] parseColumns) {
       _parseCatMapsKey = parseCatMapsKey;
       _frKey = key;
-      _ecol = ecol;
+      _ecol = ecol; // contains the categoricals column indices only
       _parseColumns = parseColumns;
     }
 
@@ -402,7 +402,8 @@ public final class ParseDataset {
             _nodeOrdMaps[eColIdx] = MemoryManager.malloc4(parseCatMaps[colIdx].maxId() + 1);
             Arrays.fill(_nodeOrdMaps[eColIdx], -1);
             //Bulk String->BufferedString conversion is slightly faster, but consumes memory
-            final BufferedString[] unifiedDomain = BufferedString.toBufferedString(_fr.vec(eColIdx).domain());
+            final BufferedString[] unifiedDomain = _fr.vec(eColIdx).isCategorical()?
+                    BufferedString.toBufferedString(_fr.vec(eColIdx).domain()):new BufferedString[0];
             //final String[] unifiedDomain = _fr.vec(colIdx).domain();
             for (int i = 0; i < unifiedDomain.length; i++) {
               //final BufferedString cat = new BufferedString(unifiedDomain[i]);
