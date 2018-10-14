@@ -95,13 +95,19 @@ public class ParseSetup extends Iced {
     _errs = errs;
     _decrypt_tool = decrypt_tool;
     _skipped_columns = skipped_columns;
-    if (_skipped_columns != null) {
-      int num_parse_columns = ncols - _skipped_columns.length;
-      _parse_columns_indices = new int[num_parse_columns];
-      int counter = 0;
-      for (int index = 0; index < ncols; index++) {
-        if (!ArrayUtils.contains(_skipped_columns, index)) {
-          _parse_columns_indices[counter++] = index;
+    setParseColumnIndices(ncols, _skipped_columns);
+  }
+
+  public void setParseColumnIndices(int ncols, int[] skipped_columns) {
+    if (skipped_columns != null) {
+      int num_parse_columns = ncols - skipped_columns.length;
+      if (num_parse_columns >= 0) {
+        _parse_columns_indices = new int[num_parse_columns];
+        int counter = 0;
+        for (int index = 0; index < ncols; index++) {
+          if (!ArrayUtils.contains(skipped_columns, index)) {
+            _parse_columns_indices[counter++] = index;
+          }
         }
       }
     } else if (ncols > 0) {
@@ -236,6 +242,10 @@ public class ParseSetup extends Iced {
     }
 
     throw new H2OIllegalArgumentException("Unknown parser configuration! Configuration=" + this);
+  }
+
+  public int getNumberColumns() {
+    return _number_columns;
   }
 
   public final DecryptionTool getDecryptionTool() {

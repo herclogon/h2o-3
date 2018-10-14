@@ -253,11 +253,13 @@ public final class ParseDataset {
     // Calculate categorical domain
     // Filter down to columns with some categoricals
     int n = 0;
-    int[] ecols2 = new int[avs.length];
-    for( int i = 0; i < avs.length; ++i )
-      if( avs[i].get_type()==Vec.T_CAT  ) // Intended type is categorical (even though no domain has been set)?
-        ecols2[n++] = i;
-    final int[] ecols = Arrays.copyOf(ecols2, n);
+    int parseCols = setup._parse_columns_indices.length;
+    int[] ecols2 = new int[parseCols];
+    for (int i = 0; i < parseCols; i++) {
+      if (avs[setup._parse_columns_indices[i]].get_type() == Vec.T_CAT) // Intended type is categorical (even though no domain has been set)?
+        ecols2[n++] = setup._parse_columns_indices[i];
+    }
+    final int[] ecols = Arrays.copyOf(ecols2, n); // only copies over the categorical columns indices and parsed columns
     // If we have any, go gather unified categorical domains
     if( n > 0 ) {
       if (!setup.getParseType().isDomainProvided) { // Domains are not provided via setup we need to collect them

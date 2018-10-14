@@ -90,6 +90,11 @@ class CsvParser extends Parser {
               " can be returned.");
 MAIN_LOOP:
     while (true) {
+      if (colIdx >= 1000)
+        System.out.println("colIdx: "+colIdx);
+      if (columnCounter >= _setup._parse_columns_indices.length)
+        System.out.println("columnCounter: "+columnCounter);
+
       final boolean forcedCategorical = forceable && colIdx < _setup._column_types.length &&
               _setup._column_types[_setup._parse_columns_indices[columnCounter]] == Vec.T_CAT;
       final boolean forcedString = forceable && colIdx  < _setup._column_types.length &&
@@ -162,6 +167,7 @@ MAIN_LOOP:
               _setup.isNA(columnCounter, str.toBufferedString())) {
             isNa = true;
           }
+
           if (!isNa && _keepColumns[colIdx]) {
             dout.addStrCol(columnCounter, str.toBufferedString());
             if (!isAllASCII && _keepColumns[colIdx])
@@ -174,9 +180,8 @@ MAIN_LOOP:
           str.set(null, 0, 0);
           quotes = 0;
           isAllASCII = true;
-          if (_keepColumns[colIdx])
+          if (_keepColumns[colIdx++])
             columnCounter++;
-          colIdx++;
           state = SEPARATOR_OR_EOL;
           // fallthrough to SEPARATOR_OR_EOL
         // ---------------------------------------------------------------------
@@ -250,8 +255,8 @@ MAIN_LOOP:
               break;
             }
           } else if (isEOL(c)) {
-            if (_keepColumns[colIdx++])
-              dout.addInvalidCol(columnCounter++);
+            colIdx++;
+            dout.addInvalidCol(columnCounter++);
             state = EOL;
             continue MAIN_LOOP;
           }
@@ -339,15 +344,14 @@ MAIN_LOOP:
 
           if (c == CHAR_SEPARATOR && quotes == 0) {
             exp = exp - fractionDigits;
-            if (_keepColumns[columnCounter])
+            if (_keepColumns[colIdx++])
               dout.addNumCol(columnCounter++,number,exp);
-            colIdx++;
             // do separator state here too
             state = WHITESPACE_BEFORE_TOKEN;
             break;
           } else if (isEOL(c)) {
             exp = exp - fractionDigits;
-            if (_keepColumns[columnCounter])
+            if (_keepColumns[colIdx])
               dout.addNumCol(columnCounter,number,exp);
             // do EOL here for speedup reasons
             columnCounter=0;
@@ -505,6 +509,12 @@ MAIN_LOOP:
           break; // MAIN_LOOP; // when the first character we see is a line end
       }
       c = bits[offset];
+
+      if (colIdx >= 1000)
+        System.out.println("colIdx: "+colIdx);
+      if (columnCounter >= _setup._parse_columns_indices.length)
+        System.out.println("columnCounter: "+columnCounter);
+
     } // end
     if (colIdx == 0)
       dout.rollbackLine();
