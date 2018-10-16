@@ -88,13 +88,10 @@ class CsvParser extends Parser {
     if (_setup.getSkippedColumns() !=null && _setup.get_parse_columns_indices()==null)
       throw new H2OIllegalArgumentException("Parser:  all columns in the file are skipped and no H2OFrame" +
               " can be returned.");
+    int colIndexNum = _keepColumns.length-1;
+    int parseIndexNum = _setup._parse_columns_indices.length-1;
 MAIN_LOOP:
     while (true) {
-      if (colIdx >= 1000)
-        System.out.println("colIdx: "+colIdx);
-      if (columnCounter >= _setup._parse_columns_indices.length)
-        System.out.println("columnCounter: "+columnCounter);
-
       final boolean forcedCategorical = forceable && colIdx < _setup._column_types.length &&
               _setup._column_types[_setup._parse_columns_indices[columnCounter]] == Vec.T_CAT;
       final boolean forcedString = forceable && colIdx  < _setup._column_types.length &&
@@ -180,7 +177,7 @@ MAIN_LOOP:
           str.set(null, 0, 0);
           quotes = 0;
           isAllASCII = true;
-          if (_keepColumns[colIdx++])
+          if ((colIdx < colIndexNum) &&  _keepColumns[colIdx++] && (columnCounter < parseIndexNum)) // only increment if not at the end
             columnCounter++;
           state = SEPARATOR_OR_EOL;
           // fallthrough to SEPARATOR_OR_EOL
@@ -250,13 +247,16 @@ MAIN_LOOP:
               break;
           } else if (c == CHAR_SEPARATOR) {
             // we have empty token, store as NaN
-            if (_keepColumns[colIdx++]) {
-              dout.addInvalidCol(columnCounter++);
-              break;
+            if (_keepColumns[colIdx])
+              dout.addInvalidCol(columnCounter);
+
+            if ((colIdx < colIndexNum) && _keepColumns[colIdx++] && (columnCounter < parseIndexNum)) {
+              columnCounter++;
             }
+            break;
           } else if (isEOL(c)) {
-            colIdx++;
-            dout.addInvalidCol(columnCounter++);
+          //  colIdx;
+            dout.addInvalidCol(columnCounter);
             state = EOL;
             continue MAIN_LOOP;
           }
@@ -344,8 +344,11 @@ MAIN_LOOP:
 
           if (c == CHAR_SEPARATOR && quotes == 0) {
             exp = exp - fractionDigits;
-            if (_keepColumns[colIdx++])
-              dout.addNumCol(columnCounter++,number,exp);
+            if (_keepColumns[colIdx])
+              dout.addNumCol(columnCounter,number,exp);
+
+            if ((colIdx < colIndexNum) && _keepColumns[colIdx++] && (columnCounter < parseIndexNum))
+              columnCounter++;
             // do separator state here too
             state = WHITESPACE_BEFORE_TOKEN;
             break;
@@ -509,12 +512,6 @@ MAIN_LOOP:
           break; // MAIN_LOOP; // when the first character we see is a line end
       }
       c = bits[offset];
-
-      if (colIdx >= 1000)
-        System.out.println("colIdx: "+colIdx);
-      if (columnCounter >= _setup._parse_columns_indices.length)
-        System.out.println("columnCounter: "+columnCounter);
-
     } // end
     if (colIdx == 0)
       dout.rollbackLine();

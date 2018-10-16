@@ -246,20 +246,35 @@ public final class ParseDataset {
     Log.trace("Done ingesting files.");
     if( job.stop_requested() ) return pds;
 
-    final AppendableVec [] avs = mfpt.vecs();
-    setup._column_names = getColumnNames(avs.length, setup._column_names);
-
+    final AppendableVec [] avs = mfpt.vecs(); // with skipped_columns excluded
     Frame fr = null;
     // Calculate categorical domain
     // Filter down to columns with some categoricals
     int n = 0;
     int parseCols = setup._parse_columns_indices.length;
+    boolean sameParseColumns = setup._number_columns == parseCols;
+    String[] parse_column_names;
+    byte[] parse_column_types;
+    if (sameParseColumns) {
+      parse_column_names = setup._column_names;
+      parse_column_types = setup._column_types;
+    } else {
+      parse_column_names = new String[parseCols];
+      parse_column_types = new byte[parseCols];
+      for (int cindex = 0; cindex < parseCols; cindex++) {
+        parse_column_names[cindex] = setup._column_names[setup._parse_columns_indices[cindex]];
+        parse_column_types[cindex] = setup._column_types[setup._parse_columns_indices[cindex]];
+      }
+      setup._column_types=parse_column_types;
+    }
+    setup._column_names = getColumnNames(avs.length, parse_column_names);
+
     int[] ecols2 = new int[parseCols];
     for (int i = 0; i < parseCols; i++) {
-      if (avs[setup._parse_columns_indices[i]].get_type() == Vec.T_CAT) // Intended type is categorical (even though no domain has been set)?
-        ecols2[n++] = setup._parse_columns_indices[i];
+      if (avs[i].get_type() == Vec.T_CAT) // Intended type is categorical (even though no domain has been set)?
+        ecols2[n++] = i;
     }
-    final int[] ecols = Arrays.copyOf(ecols2, n); // only copies over the categorical columns indices and parsed columns
+    final int[] ecols = Arrays.copyOf(ecols2, n); // skipped columns are excluded already
     // If we have any, go gather unified categorical domains
     if( n > 0 ) {
       if (!setup.getParseType().isDomainProvided) { // Domains are not provided via setup we need to collect them
@@ -288,6 +303,7 @@ public final class ParseDataset {
       }
 
       job.update(0, "Compressing data.");
+
       fr = new Frame(job._result, setup._column_names, AppendableVec.closeAll(avs));
       fr.update(job);
       Log.trace("Done compressing data.");
@@ -388,13 +404,13 @@ public final class ParseDataset {
     }
 
     @Override public void compute2() {
-      Frame _fr = DKV.getGet(_frKey);
+      Frame _fr = DKV.getGet(_frKey); // does not contain skipped columns
       // get the node local category->ordinal maps for each column from initial parse pass
       if( !MultiFileParseTask._categoricals.containsKey(_parseCatMapsKey) ) {
         tryComplete();
         return;
       }
-        final Categorical[] parseCatMaps = MultiFileParseTask._categoricals.get(_parseCatMapsKey);
+        final Categorical[] parseCatMaps = MultiFileParseTask._categoricals.get(_parseCatMapsKey); // include skipped columns
         int[][] _nodeOrdMaps = new int[_ecol.length][];
 
         // create old_ordinal->new_ordinal map for each cat column
@@ -404,8 +420,8 @@ public final class ParseDataset {
             _nodeOrdMaps[eColIdx] = MemoryManager.malloc4(parseCatMaps[colIdx].maxId() + 1);
             Arrays.fill(_nodeOrdMaps[eColIdx], -1);
             //Bulk String->BufferedString conversion is slightly faster, but consumes memory
-            final BufferedString[] unifiedDomain = _fr.vec(eColIdx).isCategorical()?
-                    BufferedString.toBufferedString(_fr.vec(eColIdx).domain()):new BufferedString[0];
+            final BufferedString[] unifiedDomain = _fr.vec(_ecol[eColIdx]).isCategorical()?
+                    BufferedString.toBufferedString(_fr.vec(_ecol[eColIdx]).domain()):new BufferedString[0];
             //final String[] unifiedDomain = _fr.vec(colIdx).domain();
             for (int i = 0; i < unifiedDomain.length; i++) {
               //final BufferedString cat = new BufferedString(unifiedDomain[i]);
@@ -997,7 +1013,7 @@ public final class ParseDataset {
   // Log information about the dataset we just parsed.
   public static void logParseResults(Frame fr) {
     long numRows = fr.anyVec().length();
-    Log.info("Parse result for " + fr._key + " (" + Long.toString(numRows) + " rows, "+Integer.toString(fr.numCols())+"columns):");
+    Log.info("Parse result for " + fr._key + " (" + Long.toString(numRows) + " rows, "+Integer.toString(fr.numCols())+" columns):");
     // get all rollups started in parallell, otherwise this takes ages!
     Futures fs = new Futures();
     Vec[] vecArr = fr.vecs();
